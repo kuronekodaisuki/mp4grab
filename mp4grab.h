@@ -42,11 +42,6 @@ typedef struct OutputStream {
     //float t, tincr, tincr2;
 } OutputStream;
 
-inline AVRational av_create_rational(int num, int den){
-	AVRational ret = { num, den };
-	return ret;
-}
-
 AVFrame *get_dummy_frame(OutputStream *stream);
 AVFrame *read_image_frame(OutputStream *stream, const char *filename);
 
