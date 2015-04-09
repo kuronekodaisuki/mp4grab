@@ -1,6 +1,8 @@
 //
 //
+#ifdef _MSC_VER
 #include <windows.h>
+#endif
 #pragma warning(disable: 4996)
 #include "getopt.h"
 #include "mp4grab.h"
