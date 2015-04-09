@@ -24,6 +24,11 @@
 #	endif
 #endif
 
+static inline AVRational av_create_rational(int num, int den){
+	AVRational ret = { num, den };
+	return ret;
+}
+
 static int write_frame(AVFormatContext *fmt_ctx, const AVRational *time_base, AVStream *st, AVPacket *pkt)
 {
     /* rescale output packet timestamp values from codec to stream timebase */
