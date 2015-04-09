@@ -239,13 +239,14 @@ int main(int argc, char *argv[])
 #else	// linux
 		if (sortByName)
 		{
-			numPics = scandir(dirname, &namelist, selector, alphasort);
+			numPics = scandir(argv[2], &namelist, selector, alphasort);
 		}
 		else 
 		{
-			numPics = scandir(dirname, &namelist, selector, timesort);
+			numPics = scandir(argv[2], &namelist, selector, timesort);
 		}
 		for (i = 0; i < numPics; ++i) {
+			AVFrame *frame;
 #ifdef	_DEBUG
 			printf("Read: %s\n", namelist[i]->d_name);
 #endif
