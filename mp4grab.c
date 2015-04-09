@@ -45,7 +45,7 @@ int64_t getDuration(const char *filename)
 }
 
 #ifndef	_MSC_VER
-int selector(struct dirent *dir)
+int selector(const struct dirent *dir)
 {
 	if(dir->d_name[0] == '.')
 	{
