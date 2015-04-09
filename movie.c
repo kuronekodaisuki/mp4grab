@@ -29,14 +29,14 @@ static inline AVRational av_create_rational(int num, int den){
 	return ret;
 }
 
-static int write_frame(AVFormatContext *fmt_ctx, const AVRational *time_base, AVStream *st, AVPacket *pkt)
+static int write_frame(AVFormatContext *context, const AVRational *time_base, AVStream *stream, AVPacket *packet)
 {
     /* rescale output packet timestamp values from codec to stream timebase */
-    av_packet_rescale_ts(pkt, *time_base, st->time_base);
-    pkt->stream_index = st->index;
+    av_packet_rescale_ts(packet, *time_base, stream->time_base);
+    packet->stream_index = stream->index;
+
     /* Write the compressed frame to the media file. */
-    //log_packet(fmt_ctx, pkt);
-    return av_interleaved_write_frame(fmt_ctx, pkt);
+    return av_interleaved_write_frame(context, packet);
 }
 
 
@@ -304,34 +304,34 @@ void open_video(AVFormatContext *context, OutputStream *stream, AVCodec *codec, 
 int write_video_frame(AVFormatContext *context, OutputStream *stream, AVFrame *frame)
 {
     int ret;
-    AVCodecContext *c;
+    AVCodecContext *codec;
     
     int got_packet = 0;
-    c = stream->st->codec;
+    codec = stream->st->codec;
     if (context->oformat->flags & AVFMT_RAWPICTURE) {
         /* a hack to avoid data copy with some raw video muxers */
-        AVPacket pkt;
-        av_init_packet(&pkt);
+        AVPacket packet;
+        av_init_packet(&packet);
         if (!frame)
             return 1;
-        pkt.flags        |= AV_PKT_FLAG_KEY;
-        pkt.stream_index  = stream->st->index;
-        pkt.data          = (uint8_t *)frame;
-        pkt.size          = sizeof(AVPicture);
-        pkt.pts = pkt.dts = frame->pts;
-        av_packet_rescale_ts(&pkt, c->time_base, stream->st->time_base);
-        ret = av_interleaved_write_frame(context, &pkt);
+        packet.flags        |= AV_PKT_FLAG_KEY;
+        packet.stream_index  = stream->st->index;
+        packet.data          = (uint8_t *)frame;
+        packet.size          = sizeof(AVPicture);
+        packet.pts = packet.dts = frame->pts;
+        av_packet_rescale_ts(&packet, codec->time_base, stream->st->time_base);
+        ret = av_interleaved_write_frame(context, &packet);
     } else {
-        AVPacket pkt = { 0 };
-        av_init_packet(&pkt);
+        AVPacket packet = { 0 };
+        av_init_packet(&packet);
         /* encode the image */
-        ret = avcodec_encode_video2(c, &pkt, frame, &got_packet);
+        ret = avcodec_encode_video2(codec, &packet, frame, &got_packet);
         if (ret < 0) {
             fprintf(stderr, "Error encoding video frame: %s\n", av_err2str(ret));
             exit(1);
         }
         if (got_packet) {
-            ret = write_frame(context, &c->time_base, stream->st, &pkt);
+            ret = write_frame(context, &codec->time_base, stream->st, &packet);
         } else {
             ret = 0;
         }

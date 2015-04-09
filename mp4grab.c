@@ -1,19 +1,26 @@
 //
 //
-#ifdef _MSC_VER
+#ifdef	_MSC_VER
 #include <windows.h>
-#endif
+#include <stdint.h>
 #pragma warning(disable: 4996)
 #include "getopt.h"
+#else
+#include <dirent.h>
+#include <getopt.h>
+#endif
 #include "mp4grab.h"
 
 void Usage(const char *app)
 {
-    printf("USAGE: %s output_file picture_file [FPS [-h ddd -w ddd]]\n"
+    printf("USAGE: %s output_file picture_file [FPS [-h ddd -w ddd][-t]]\n"
 		"\toutput_file: Path to video file(Relative/absolute)\n"
 		"\tpicture_file: Path to picture file(Relative/absolute)\n"
 		"\tFPS: frame per second\n"
-            "\n", app);
+		"\t-h: option for height specified ddd\n"
+		"\t-w: option for width specified ddd\n"
+		"\t-t: option for sort by time stamp(default alphabetic name order\n"
+		"\n", app);
 }
 
 // get duration of movie file
@@ -37,6 +44,22 @@ int64_t getDuration(const char *filename)
 	return duration;
 }
 
+#ifndef	_MSC_VER
+int selector(struct dirent *dir)
+{
+	if(dir->d_name[0] == '.')
+	{
+		return (0);
+	}
+	return (1);
+}
+
+int timesort(const struct dirent **s1, const struct dirent **s2)
+{
+	return strcmp( (*s1)->d_name, (*s2)->d_name);	// TODO fix by timestamp
+}
+#endif
+
 int main(int argc, char *argv[])
 {
     OutputStream stream = {WIDTH, HEIGHT, 0 };
@@ -46,6 +69,8 @@ int main(int argc, char *argv[])
     AVCodec *video_codec;
     AVDictionary *opt = NULL;
 	int64_t	duration = -1;
+
+	int sortByName = 1;
 	int c;
 	int ret;
     int have_video = 0;
@@ -57,6 +82,9 @@ int main(int argc, char *argv[])
 	char input_path[MAX_PATH] = "..\\Archive\\";
 	WCHAR buffer[MAX_PATH] = L"..\\Archive\\*.png";
 	size_t wlen;
+#else
+	struct dirent **namelist;
+	int i, numPics = 0;
 #endif
 
     /* Initialize libavcodec, and register all codecs and formats. */
@@ -87,7 +115,7 @@ int main(int argc, char *argv[])
 #endif
     }
 
-	while ((c = getopt(argc, argv, "w:h:")) != -1) {
+	while ((c = getopt(argc, argv, "w:h:t")) != -1) {
 		int value = -1;
 		switch (c)
 		{
@@ -107,6 +135,10 @@ int main(int argc, char *argv[])
 				stream.height = value;
 			}
 			printf("height: %s\n", optarg);
+			break;
+
+		case 't':	// sort by time stamp
+			sortByName = 0;
 			break;
 		}
 	}
@@ -205,7 +237,26 @@ int main(int argc, char *argv[])
 			} while (FindNextFile(hFind, &ffd) != 0);
 		}
 #else	// linux
-		
+		if (sortByName)
+		{
+			numPics = scandir(dirname, &namelist, selector, alphasort);
+		}
+		else 
+		{
+			numPics = scandir(dirname, &namelist, selector, timesort);
+		}
+		for (i = 0; i < numPics; ++i) {
+#ifdef	_DEBUG
+			printf("Read: %s\n", namelist[i]->d_name);
+#endif
+			frame = read_image_frame(&stream, namelist[i]->d_name);
+			if (write_video_frame(context, &stream, frame))
+			{
+				break;
+			}
+			free(namelist[i]);
+		}
+		free(namelist);
 #endif
 
     /* Write the trailer, if any. The trailer must be written before you

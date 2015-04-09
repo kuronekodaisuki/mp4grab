@@ -148,8 +148,6 @@
   <ItemGroup>
     <ClInclude Include="getopt.h" />
     <ClInclude Include="mp4grab.h" />
-    <ClInclude Include="stdafx.h" />
-    <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="getopt.c" />
