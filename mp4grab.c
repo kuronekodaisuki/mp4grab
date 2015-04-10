@@ -6,6 +6,8 @@
 #pragma warning(disable: 4996)
 #include "getopt.h"
 #else
+#include <linux/limits.h>
+#define MAX_PATH	PATH_MAX
 #include <dirent.h>
 #include <getopt.h>
 #endif
@@ -150,11 +152,11 @@ int main(int argc, char *argv[])
 #else	// linux
 	if (sortByName)
 	{
-		numPics = scandir(dirname, &namelist, selector, alphasort);
+		numPics = scandir(pictures, &namelist, selector, alphasort);
 	}
 	else 
 	{
-		numPics = scandir(dirname, &namelist, selector, timesort);
+		numPics = scandir(pictures, &namelist, selector, timesort);
 	}
 	for (i = 0; i < numPics; ++i) {
 		AVFrame *frame;
