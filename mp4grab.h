@@ -38,8 +38,6 @@ typedef struct OutputStream {
     struct SwsContext *sws_ctx;
     struct SwrContext *swr_ctx;
     int64_t next_pts; /* pts of the next frame that will be generated */
-    //int samples_count;
-    //float t, tincr, tincr2;
 } OutputStream;
 
 
@@ -50,3 +48,9 @@ void open_video(AVFormatContext *context, OutputStream *stream, AVCodec *codec, 
 void add_stream(AVFormatContext *context, OutputStream *stream, AVCodec **codec, enum AVCodecID codec_id);
 int write_video_frame(AVFormatContext *context, OutputStream *stream, AVFrame *frame);
 void close_stream(AVFormatContext *context, OutputStream *stream);
+
+AVFormatContext* open_input_file(const char *filename);
+AVFormatContext* open_output_file(const char *filename, AVFormatContext *context);
+
+const char * prepare(AVFormatContext **context, OutputStream *stream, const char *filename);
+void finalize(AVFormatContext *context, OutputStream *stream);
