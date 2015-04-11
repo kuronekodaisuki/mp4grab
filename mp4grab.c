@@ -1,16 +1,6 @@
 //
 //
-#ifdef	_MSC_VER
-#include <windows.h>
-#include <stdint.h>
-#pragma warning(disable: 4996)
-#include "getopt.h"
-#else
-#include <linux/limits.h>
-#define MAX_PATH	PATH_MAX
-#include <dirent.h>
-#include <getopt.h>
-#endif
+#include <error.h>
 #include "mp4grab.h"
 
 void Usage(const char *app)
@@ -44,6 +34,7 @@ int timesort(const struct dirent **s1, const struct dirent **s2)
 
 int main(int argc, char *argv[])
 {
+	int ret;
     OutputStream stream = {WIDTH, HEIGHT, 0 };
     const char *filename, *pictures, *temporary;
     AVFormatContext *context = NULL;	
@@ -51,7 +42,7 @@ int main(int argc, char *argv[])
 
 	int sortByName = 1;
 	int c;
-   int encode_video = 0;
+	int encode_video = 0;
 
 #ifdef	_MSC_VER
 	HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -178,8 +169,12 @@ int main(int argc, char *argv[])
 	finalize(context, &stream);
 	if (strcmp(filename, temporary) != 0)
 	{
-		remove(filename);
-		rename(temporary, filename);
+		ret = remove(filename);
+		ret = rename(temporary, filename);
+		if (ret != 0)
+		{
+			printf("%d\n", errno);
+		}
 	}
 
     return 0;

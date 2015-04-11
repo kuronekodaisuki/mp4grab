@@ -6,10 +6,20 @@
 #include <string.h>
 #include <math.h>
 
+#ifdef	_MSC_VER
+#include <windows.h>
+#include <stdint.h>
 #pragma warning(disable: 4996)
-
+#include "getopt.h"
 #define inline	__inline
 #define snprintf	_snprintf
+#else
+#include <linux/limits.h>
+#define MAX_PATH	PATH_MAX
+#include <dirent.h>
+#include <getopt.h>
+#endif
+
 
 #include <libavutil/avassert.h>
 #include <libavutil/channel_layout.h>

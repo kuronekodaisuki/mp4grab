@@ -564,7 +564,8 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 	int ret;
 	AVCodec *codec;
 	AVDictionary *opt = NULL;
-	const char temporary[] = "temp.mp4";
+	char drive[MAX_PATH], dir[MAX_PATH];
+	static char temporary[MAX_PATH] = "temp.mp4";
 
     /* Initialize libavcodec, and register all codecs and formats. */
     av_register_all();
@@ -575,6 +576,15 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 		OutputStream input_stream = {stream->width, stream->height, 0 };
 		AVFormatContext *input_context = NULL;
 		printf("DUPLICATE %s\n", filename);
+		_splitpath(filename, drive, dir, NULL, NULL);	
+		if (0 < strlen(drive))
+		{
+			sprintf(temporary, "%s:%s%s", drive, dir, "temp.mp4");
+		}
+		else
+		{
+			sprintf(temporary, "%s%s", dir, "temp.mp4");
+		}
 		// duplicate
 		input_context = open_input_file(filename);
 		output(context, stream, temporary);
@@ -590,7 +600,7 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 		}
 		*/
 		avformat_close_input(&input_context);
-		return filename;
+		return temporary;
 	}
 	else 
 	{
