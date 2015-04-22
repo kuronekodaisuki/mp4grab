@@ -50,6 +50,7 @@ int main(int argc, char *argv[])
 	size_t wlen;
 	char drive[MAX_PATH], dir[MAX_PATH];
 #else
+	char buffer[MAX_PATH], dir[MAX_PATH], input_path[MAX_PATH];
 	struct dirent **namelist;
 	int i, numPics = 0;
 #endif
@@ -140,6 +141,8 @@ int main(int argc, char *argv[])
 		} while (FindNextFile(hFind, &ffd) != 0);
 	}
 #else	// linux
+	strcpy(dir, pictures);
+	sprintf(input_path, "%s", dirname(dir));
 	if (sortByName)
 	{
 		numPics = scandir(pictures, &namelist, NULL, alphasort);
@@ -151,10 +154,11 @@ int main(int argc, char *argv[])
 	printf("%d pictures\n", numPics);
 	for (i = 0; i < numPics; ++i) {
 		AVFrame *frame;
+		sprintf(buffer, "%s/%s", input_path, namelist[i]->d_name);
 #ifdef	_DEBUG
-		printf("Read: %s\n", namelist[i]->d_name);
+		printf("Read: %s\n", buffer);
 #endif
-		frame = read_image_frame(&stream, namelist[i]->d_name);
+		frame = read_image_frame(&stream, buffer);
 		if (write_video_frame(context, &stream, frame))
 		{
 			break;
