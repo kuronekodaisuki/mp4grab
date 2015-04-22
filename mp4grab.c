@@ -1,6 +1,10 @@
 //
 //
 #include <error.h>
+#ifndef _MSC_VER
+#include <sys/types.h>
+#include <dirent.h>
+#endif
 #include "mp4grab.h"
 
 void Usage(const char *app)
@@ -50,8 +54,9 @@ int main(int argc, char *argv[])
 	size_t wlen;
 	char drive[MAX_PATH], dir[MAX_PATH];
 #else
-	char buffer[MAX_PATH], dir[MAX_PATH], input_path[MAX_PATH];
-	struct dirent **namelist;
+	char buffer[MAX_PATH], dir[MAX_PATH], *input_path;
+	DIR *directory;
+	struct dirent *entry, **namelist;
 	int i, numPics = 0;
 #endif
 
@@ -142,10 +147,19 @@ int main(int argc, char *argv[])
 	}
 #else	// linux
 	strcpy(dir, pictures);
-	sprintf(input_path, "%s", dirname(dir));
+	/*
+	directory = opendir(pictures);
+	for (entry = readdir(directory); entry != NULL; entry = readdir(directory)) {
+		if (entry->d_type != DT_DIR) {
+			printf("Read: %s\n", entry->d_name);
+		}
+	}
+	closedir(directory);
+	*/
+	//input_path = dirname(dir);
 	if (sortByName)
 	{
-		numPics = scandir(pictures, &namelist, NULL, alphasort);
+		numPics = scandir(pictures, &namelist, selector, alphasort);
 	}
 	else 
 	{
@@ -154,10 +168,10 @@ int main(int argc, char *argv[])
 	printf("%d pictures\n", numPics);
 	for (i = 0; i < numPics; ++i) {
 		AVFrame *frame;
-		sprintf(buffer, "%s/%s", input_path, namelist[i]->d_name);
-#ifdef	_DEBUG
+		sprintf(buffer, "%s/%s", dir, namelist[i]->d_name);
+//#ifdef	_DEBUG
 		printf("Read: %s\n", buffer);
-#endif
+//#endif
 		frame = read_image_frame(&stream, buffer);
 		if (write_video_frame(context, &stream, frame))
 		{
