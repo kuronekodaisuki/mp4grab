@@ -484,6 +484,7 @@ int write_video_frame(AVFormatContext *context, OutputStream *stream, AVFrame *f
     return (frame || got_packet) ? 0 : 1;
 }
 
+
 void close_stream(AVFormatContext *context, OutputStream *stream)
 {
     avcodec_close(stream->st->codec);
@@ -512,6 +513,65 @@ int64_t getDuration(const char *filename)
 		}
 	}
 	return duration;
+}
+
+// 
+const char * prepare(AVFormatContext **context, OutputStream *stream, const char *filename)
+{
+	int ret;
+	AVCodec *codec;
+	AVDictionary *opt = NULL;
+#ifdef _MSC_VER
+	char drive[MAX_PATH], dir[MAX_PATH];
+#else
+	char buffer[MAX_PATH], *dir;
+#endif
+	static char temporary[MAX_PATH] = "temp.mp4";
+
+    /* Initialize libavcodec, and register all codecs and formats. */
+    av_register_all();
+
+	if (0 <= getDuration(filename))
+	{
+		AVPacket packet = { 0 };
+		OutputStream input_stream = {stream->width, stream->height, 0 };
+		AVFormatContext *input_context = NULL;
+		printf("DUPLICATE %s\n", filename);
+#ifdef	_MSC_VER
+		_splitpath(filename, drive, dir, NULL, NULL);	
+		if (0 < strlen(drive))
+		{
+			sprintf(temporary, "%s:%s%s", drive, dir, "temp.mp4");
+		}
+		else
+		{
+			sprintf(temporary, "%s%s", dir, "temp.mp4");
+		}
+#else
+		strcpy(buffer, filename);
+		dir = dirname(buffer);
+		sprintf(temporary, "%s/%s", dir, "temp.mp4");
+#endif
+		// duplicate
+		input_context = open_input_file(filename);
+		output(context, stream, temporary);
+		// repeat packets	
+		while (0 <= av_read_frame(input_context, &packet))
+		{
+			stream->frame->pts = packet.pts;		// ここでインデックスを引き継ぐ
+            av_packet_rescale_ts(&packet,
+				input_context->streams[packet.stream_index]->time_base,
+				(*context)->streams[packet.stream_index]->time_base);
+            ret = av_interleaved_write_frame(*context, &packet);
+		}
+		avformat_close_input(&input_context);
+		return temporary;
+	}
+	else 
+	{
+		output(context, stream, filename);
+		return filename;
+	}
 }
 
 int output(AVFormatContext **context, OutputStream *stream, const char *filename)
@@ -559,66 +619,6 @@ int output(AVFormatContext **context, OutputStream *stream, const char *filename
 		return 0;
 	}
 	return 1;
-}
-
-const char * prepare(AVFormatContext **context, OutputStream *stream, const char *filename)
-{
-	int ret;
-	AVCodec *codec;
-	AVDictionary *opt = NULL;
-#ifdef _MSC_VER
-	char drive[MAX_PATH], dir[MAX_PATH];
-#else
-	char buffer[MAX_PATH], *dir;
-#endif
-	static char temporary[MAX_PATH] = "temp.mp4";
-
-    /* Initialize libavcodec, and register all codecs and formats. */
-    av_register_all();
-
-	if (0 <= getDuration(filename))
-	{
-		AVPacket packet = { 0 };
-		OutputStream input_stream = {stream->width, stream->height, 0 };
-		AVFormatContext *input_context = NULL;
-		printf("DUPLICATE %s\n", filename);
-#ifdef	_MSC_VER
-		_splitpath(filename, drive, dir, NULL, NULL);	
-		if (0 < strlen(drive))
-		{
-			sprintf(temporary, "%s:%s%s", drive, dir, "temp.mp4");
-		}
-		else
-		{
-			sprintf(temporary, "%s%s", dir, "temp.mp4");
-		}
-#else
-		strcpy(buffer, filename);
-		dir = dirname(buffer);
-		sprintf(temporary, "%s/%s", dir, "temp.mp4");
-#endif
-		// duplicate
-		input_context = open_input_file(filename);
-		output(context, stream, temporary);
-		// repeat packets
-		/*
-		while (0 <= av_read_frame(*context, &packet))
-		{
-            av_packet_rescale_ts(&packet,
-				input_context->streams[packet.stream_index]->time_base,
-				(*context)->streams[packet.stream_index]->time_base);
-
-            ret = av_interleaved_write_frame(*context, &packet);
-		}
-		*/
-		avformat_close_input(&input_context);
-		return temporary;
-	}
-	else 
-	{
-		output(context, stream, filename);
-		return filename;
-	}
 }
 
 void finalize(AVFormatContext *context, OutputStream *stream)
