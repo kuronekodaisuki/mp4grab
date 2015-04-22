@@ -143,12 +143,13 @@ int main(int argc, char *argv[])
 #else	// linux
 	if (sortByName)
 	{
-		numPics = scandir(pictures, &namelist, selector, alphasort);
+		numPics = scandir(pictures, &namelist, NULL, alphasort);
 	}
 	else 
 	{
 		numPics = scandir(pictures, &namelist, selector, timesort);
 	}
+	printf("%d pictures\n", numPics);
 	for (i = 0; i < numPics; ++i) {
 		AVFrame *frame;
 #ifdef	_DEBUG
