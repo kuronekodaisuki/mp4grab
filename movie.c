@@ -22,6 +22,8 @@
 #pragma comment(lib, "opencv_highgui2410.lib")
 #pragma comment(lib, "opencv_imgproc2410.lib")
 #	endif
+#else
+#include <libgen.h>
 #endif
 
 static inline AVRational av_create_rational(int num, int den){
@@ -564,7 +566,11 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 	int ret;
 	AVCodec *codec;
 	AVDictionary *opt = NULL;
+#ifdef _MSC_VER
 	char drive[MAX_PATH], dir[MAX_PATH];
+#else
+	char buffer[MAX_PATH], *dir;
+#endif
 	static char temporary[MAX_PATH] = "temp.mp4";
 
     /* Initialize libavcodec, and register all codecs and formats. */
@@ -576,6 +582,7 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 		OutputStream input_stream = {stream->width, stream->height, 0 };
 		AVFormatContext *input_context = NULL;
 		printf("DUPLICATE %s\n", filename);
+#ifdef	_MSC_VER
 		_splitpath(filename, drive, dir, NULL, NULL);	
 		if (0 < strlen(drive))
 		{
@@ -585,6 +592,11 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 		{
 			sprintf(temporary, "%s%s", dir, "temp.mp4");
 		}
+#else
+		strcpy(buffer, filename);
+		dir = dirname(buffer);
+		sprintf(temporary, "%s/%s", dir, "temp.mp4");
+#endif
 		// duplicate
 		input_context = open_input_file(filename);
 		output(context, stream, temporary);
