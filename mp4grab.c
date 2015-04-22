@@ -38,8 +38,6 @@ int main(int argc, char *argv[])
     OutputStream stream = {WIDTH, HEIGHT, 0 };
     const char *filename, *pictures, *temporary;
     AVFormatContext *context = NULL;	
-	char drive[MAX_PATH], dir[MAX_PATH];
-
 	int sortByName = 1;
 	int c;
 	int encode_video = 0;
@@ -50,6 +48,7 @@ int main(int argc, char *argv[])
 	char input_path[MAX_PATH] = "..\\Archive\\";
 	WCHAR buffer[MAX_PATH] = L"..\\Archive\\*.png";
 	size_t wlen;
+	char drive[MAX_PATH], dir[MAX_PATH];
 #else
 	struct dirent **namelist;
 	int i, numPics = 0;
