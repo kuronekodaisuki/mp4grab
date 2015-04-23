@@ -47,7 +47,8 @@ typedef struct OutputStream {
     AVFrame *tmp_frame;
     struct SwsContext *sws_ctx;
     struct SwrContext *swr_ctx;
-    int64_t next_pts; /* pts of the next frame that will be generated */
+    int64_t next_pts;	// pts of the next frame that will be generated */
+	int64_t	last_pts;	// last pts of duped movie 
 } OutputStream;
 
 

@@ -558,12 +558,14 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 		// repeat packets	
 		while (0 <= av_read_frame(input_context, &packet))
 		{
-			stream->frame->pts = packet.pts;		// ここでインデックスを引き継ぐ
+			stream->last_pts = packet.pts;		// ここでインデックスを引き継ぐ
             av_packet_rescale_ts(&packet,
 				input_context->streams[packet.stream_index]->time_base,
 				(*context)->streams[packet.stream_index]->time_base);
             ret = av_interleaved_write_frame(*context, &packet);
 		}
+		stream->next_pts = (stream->last_pts * stream->st->codec->time_base.den * stream->st->time_base.num) 
+			/ (stream->st->time_base.den * stream->st->codec->time_base.num);
 		avformat_close_input(&input_context);
 		return temporary;
 	}

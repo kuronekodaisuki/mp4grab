@@ -114,14 +114,7 @@ int main(int argc, char *argv[])
 	{
 		sprintf(input_path, "%s", dir);
 	}
-	if ((hFind = FindFirstFile(buffer, &ffd)) == INVALID_HANDLE_VALUE) {
-		AVFrame *frame;
-		while (encode_video) {
-			frame = get_dummy_frame(&stream);
-			encode_video = !write_video_frame(context, &stream, frame);
-		}
-	}
-	else {
+	if ((hFind = FindFirstFile(buffer, &ffd)) != INVALID_HANDLE_VALUE) {
 		AVFrame *frame;
 		do {
 			if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
