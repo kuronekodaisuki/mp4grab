@@ -4,14 +4,17 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../getopt.c \
 ../movie.c \
 ../mp4grab.c 
 
 OBJS += \
+./getopt.o \
 ./movie.o \
 ./mp4grab.o 
 
 C_DEPS += \
+./getopt.d \
 ./movie.d \
 ./mp4grab.d 
 
