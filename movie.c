@@ -63,32 +63,6 @@ static AVFrame *alloc_picture(enum AVPixelFormat pix_fmt, int width, int height)
     return picture;
 }
 
-/* Prepare a dummy image. */
-static void fill_yuv_image(AVFrame *pict, int frame_index,
-                           int width, int height)
-{
-    int x, y, i, ret;
-    /* when we pass a frame to the encoder, it may keep a reference to it
-     * internally;
-     * make sure we do not overwrite it here
-     */
-    ret = av_frame_make_writable(pict);
-    if (ret < 0)
-        exit(1);
-    i = frame_index;
-    /* Y */
-    for (y = 0; y < height; y++)
-        for (x = 0; x < width; x++)
-            pict->data[0][y * pict->linesize[0] + x] = x + y + i * 3;
-    /* Cb and Cr */
-    for (y = 0; y < height / 2; y++) {
-        for (x = 0; x < width / 2; x++) {
-            pict->data[1][y * pict->linesize[1] + x] = 128 + y + i * 2;
-            pict->data[2][y * pict->linesize[2] + x] = 64 + x + i * 5;
-        }
-    }
-}
-
 // read image and prepare to write(resize and convert to YUV420)
 static int ReadImage(AVCodecContext *context, OutputStream *stream, const char *filename)	
 {
@@ -150,39 +124,188 @@ AVFrame *read_image_frame(OutputStream *stream, const char *filename)
     return stream->frame;
 }
 
-AVFrame *get_dummy_frame(OutputStream *stream)
+// get duration of movie file
+static int64_t getDuration(const char *filename)
 {
-    AVCodecContext *c = stream->st->codec;
-    /* check if we want to generate more frames */
-    if (av_compare_ts(stream->next_pts, stream->st->codec->time_base,
-		(int64_t)STREAM_DURATION, av_create_rational( 1, 1 )) >= 0)
-        return NULL;
-    if (c->pix_fmt != AV_PIX_FMT_YUV420P) {
-        /* as we only generate a YUV420P picture, we must convert it
-         * to the codec pixel format if needed */
-        if (!stream->sws_ctx) {
-            stream->sws_ctx = sws_getContext(c->width, c->height,
-                                          AV_PIX_FMT_YUV420P,
-                                          c->width, c->height,
-                                          c->pix_fmt,
-                                          SCALE_FLAGS, NULL, NULL, NULL);
-            if (!stream->sws_ctx) {
-                fprintf(stderr,
-                        "Could not initialize the conversion context\n");
-                exit(1);
-            }
-        }
-        fill_yuv_image(stream->tmp_frame, (int)stream->next_pts, c->width, c->height);
-        sws_scale(stream->sws_ctx,
-                  (const uint8_t * const *)stream->tmp_frame->data, stream->tmp_frame->linesize,
-                  0, c->height, stream->frame->data, stream->frame->linesize);
-    } else {
-        fill_yuv_image(stream->frame, (int)stream->next_pts, c->width, c->height);
-    }
-    stream->frame->pts = stream->next_pts++;
-    return stream->frame;
+	int64_t duration = -1;
+	AVFormatContext* context = avformat_alloc_context();
+	if (context != NULL)
+	{
+		avformat_open_input(&context, filename, NULL, NULL);
+		if (context != NULL)
+		{
+			avformat_find_stream_info(context,NULL);
+			duration = context->duration;
+			printf("%d, %d\n", duration, context->start_time);
+		// etc
+			avformat_close_input(&context);
+			avformat_free_context(context);
+		}
+	}
+	return duration;
 }
 
+/* Add an output stream. */
+static void add_stream(AVFormatContext *context, OutputStream *stream, 
+                       AVCodec **codec,
+                       enum AVCodecID codec_id)
+{
+    AVCodecContext *c;
+    /* find the encoder */
+    *codec = avcodec_find_encoder(codec_id);
+    if (!(*codec)) {
+        fprintf(stderr, "Could not find encoder for '%s'\n",
+                avcodec_get_name(codec_id));
+        exit(1);
+    }
+    stream->st = avformat_new_stream(context, *codec);
+    if (!stream->st) {
+        fprintf(stderr, "Could not allocate stream\n");
+        exit(1);
+    }
+    stream->st->id = context->nb_streams-1;
+    c = stream->st->codec;
+    switch ((*codec)->type) {
+	/*
+    case AVMEDIA_TYPE_AUDIO:
+        c->sample_fmt  = (*codec)->sample_fmts ?
+            (*codec)->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
+        c->bit_rate    = 64000;
+        c->sample_rate = 44100;
+        if ((*codec)->supported_samplerates) {
+		    int i;
+            c->sample_rate = (*codec)->supported_samplerates[0];
+            for (i = 0; (*codec)->supported_samplerates[i]; i++) {
+                if ((*codec)->supported_samplerates[i] == 44100)
+                    c->sample_rate = 44100;
+            }
+        }
+        c->channels        = av_get_channel_layout_nb_channels(c->channel_layout);
+        c->channel_layout = AV_CH_LAYOUT_STEREO;
+        if ((*codec)->channel_layouts) {
+		    int i;
+            c->channel_layout = (*codec)->channel_layouts[0];
+            for (i = 0; (*codec)->channel_layouts[i]; i++) {
+                if ((*codec)->channel_layouts[i] == AV_CH_LAYOUT_STEREO)
+                    c->channel_layout = AV_CH_LAYOUT_STEREO;
+            }
+        }
+        c->channels        = av_get_channel_layout_nb_channels(c->channel_layout);
+		stream->st->time_base = av_create_rational( 1, c->sample_rate );
+        break;
+	*/
+    case AVMEDIA_TYPE_VIDEO:
+        c->codec_id = codec_id;
+        c->bit_rate = 400000;
+        /* Resolution must be a multiple of two. */
+		c->width    = stream->width;
+		c->height   = stream->height;
+        /* timebase: This is the fundamental unit of time (in seconds) in terms
+         * of which frame timestamps are represented. For fixed-fps content,
+         * timebase should be 1/framerate and timestamp increments should be
+         * identical to 1. */
+		stream->st->time_base = av_create_rational( STREAM_FRAME_INTERVAL, STREAM_FRAME_RATE);
+        c->time_base       = stream->st->time_base;
+        c->gop_size      = 12; /* emit one intra frame every twelve frames at most */
+        c->pix_fmt       = STREAM_PIX_FMT;
+		c->max_b_frames = 1;
+        if (c->codec_id == AV_CODEC_ID_MPEG2VIDEO) {
+            /* just for testing, we also add B frames */
+            c->max_b_frames = 2;
+        }
+        if (c->codec_id == AV_CODEC_ID_MPEG1VIDEO) {
+            /* Needed to avoid using macroblocks in which some coeffs overflow.
+             * This does not happen with normal video, it just happens here as
+             * the motion of the chroma plane does not match the luma plane. */
+            c->mb_decision = 2;
+        }
+    break;
+    default:
+        break;
+    }
+    /* Some formats want stream headers to be separate. */
+    if (context->oformat->flags & AVFMT_GLOBALHEADER)
+        c->flags |= CODEC_FLAG_GLOBAL_HEADER;
+}
+
+static void open_video(AVFormatContext *context, OutputStream *stream, AVCodec *codec, AVDictionary *opt_arg)
+{
+    int ret;
+    AVCodecContext *c = stream->st->codec;
+    AVDictionary *opt = NULL;
+    av_dict_copy(&opt, opt_arg, 0);
+    /* open the codec */
+    ret = avcodec_open2(c, codec, &opt);
+    av_dict_free(&opt);
+    if (ret < 0) {
+        fprintf(stderr, "Could not open video codec: %s\n", av_err2str(ret));
+        exit(1);
+    }
+    /* allocate and init a re-usable frame */
+    stream->frame = alloc_picture(c->pix_fmt, c->width, c->height);
+    if (!stream->frame) {
+        fprintf(stderr, "Could not allocate video frame\n");
+        exit(1);
+    }
+    /* If the output format is not YUV420P, then a temporary YUV420P
+     * picture is needed too. It is then converted to the required
+     * output format. */
+    stream->tmp_frame = NULL;
+    if (c->pix_fmt != AV_PIX_FMT_YUV420P) {
+        stream->tmp_frame = alloc_picture(AV_PIX_FMT_YUV420P, c->width, c->height);
+        if (!stream->tmp_frame) {
+            fprintf(stderr, "Could not allocate temporary picture\n");
+            exit(1);
+        }
+    }
+}
+
+static int output(AVFormatContext **context, OutputStream *stream, const char *filename)
+{
+	int ret;
+	AVCodec *codec;
+	AVDictionary *opt = NULL;
+	
+	/* allocate the output media context */
+    avformat_alloc_output_context2(context, NULL, NULL, filename);
+    if (!context) {
+        printf("Could not deduce output format from file extension: using MPEG.\n");
+        avformat_alloc_output_context2(context, NULL, "mpeg", filename);
+    }
+    if (!context)
+        return 0;
+    
+	/* Add the audio and video streams using the default format codecs
+     * and initialize the codecs. */
+    if ((*context)->oformat->video_codec != AV_CODEC_ID_NONE) {
+        add_stream(*context, stream, &codec, (*context)->oformat->video_codec);
+    }
+
+    /* Now that all the parameters are set, we can open the audio and
+     * video codecs and allocate the necessary encode buffers. */
+	open_video(*context, stream, codec, opt);
+
+    av_dump_format(*context, 0, filename, 1);
+
+    /* open the output file, if needed */
+    if (!((*context)->oformat->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&(*context)->pb, filename, AVIO_FLAG_READ_WRITE);
+        if (ret < 0) {
+            fprintf(stderr, "Could not open '%s': %s\n", filename,
+                    av_err2str(ret));
+            return 0;
+        }
+    }
+
+	/* Write the stream header, if any. */
+	ret = avformat_write_header(*context, &opt);
+	if (ret < 0) {
+		fprintf(stderr, "Error occurred when opening output file: %s\n",
+				av_err2str(ret));
+		return 0;
+	}
+	return 1;
+}
 
 /////////////////////////////////////////////////////////////////////////////
 AVFormatContext * open_input_file(const char *filename)
@@ -323,120 +446,7 @@ AVFormatContext * open_output_file(const char *filename, AVFormatContext *ifmt_c
     return ofmt_ctx;
 }
 
-/* Add an output stream. */
-void add_stream(AVFormatContext *context, OutputStream *stream, 
-                       AVCodec **codec,
-                       enum AVCodecID codec_id)
-{
-    AVCodecContext *c;
-    /* find the encoder */
-    *codec = avcodec_find_encoder(codec_id);
-    if (!(*codec)) {
-        fprintf(stderr, "Could not find encoder for '%s'\n",
-                avcodec_get_name(codec_id));
-        exit(1);
-    }
-    stream->st = avformat_new_stream(context, *codec);
-    if (!stream->st) {
-        fprintf(stderr, "Could not allocate stream\n");
-        exit(1);
-    }
-    stream->st->id = context->nb_streams-1;
-    c = stream->st->codec;
-    switch ((*codec)->type) {
-	/*
-    case AVMEDIA_TYPE_AUDIO:
-        c->sample_fmt  = (*codec)->sample_fmts ?
-            (*codec)->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
-        c->bit_rate    = 64000;
-        c->sample_rate = 44100;
-        if ((*codec)->supported_samplerates) {
-		    int i;
-            c->sample_rate = (*codec)->supported_samplerates[0];
-            for (i = 0; (*codec)->supported_samplerates[i]; i++) {
-                if ((*codec)->supported_samplerates[i] == 44100)
-                    c->sample_rate = 44100;
-            }
-        }
-        c->channels        = av_get_channel_layout_nb_channels(c->channel_layout);
-        c->channel_layout = AV_CH_LAYOUT_STEREO;
-        if ((*codec)->channel_layouts) {
-		    int i;
-            c->channel_layout = (*codec)->channel_layouts[0];
-            for (i = 0; (*codec)->channel_layouts[i]; i++) {
-                if ((*codec)->channel_layouts[i] == AV_CH_LAYOUT_STEREO)
-                    c->channel_layout = AV_CH_LAYOUT_STEREO;
-            }
-        }
-        c->channels        = av_get_channel_layout_nb_channels(c->channel_layout);
-		stream->st->time_base = av_create_rational( 1, c->sample_rate );
-        break;
-	*/
-    case AVMEDIA_TYPE_VIDEO:
-        c->codec_id = codec_id;
-        c->bit_rate = 400000;
-        /* Resolution must be a multiple of two. */
-		c->width    = stream->width;
-		c->height   = stream->height;
-        /* timebase: This is the fundamental unit of time (in seconds) in terms
-         * of which frame timestamps are represented. For fixed-fps content,
-         * timebase should be 1/framerate and timestamp increments should be
-         * identical to 1. */
-		stream->st->time_base = av_create_rational( STREAM_FRAME_INTERVAL, STREAM_FRAME_RATE);
-        c->time_base       = stream->st->time_base;
-        c->gop_size      = 12; /* emit one intra frame every twelve frames at most */
-        c->pix_fmt       = STREAM_PIX_FMT;
-		c->max_b_frames = 1;
-        if (c->codec_id == AV_CODEC_ID_MPEG2VIDEO) {
-            /* just for testing, we also add B frames */
-            c->max_b_frames = 2;
-        }
-        if (c->codec_id == AV_CODEC_ID_MPEG1VIDEO) {
-            /* Needed to avoid using macroblocks in which some coeffs overflow.
-             * This does not happen with normal video, it just happens here as
-             * the motion of the chroma plane does not match the luma plane. */
-            c->mb_decision = 2;
-        }
-    break;
-    default:
-        break;
-    }
-    /* Some formats want stream headers to be separate. */
-    if (context->oformat->flags & AVFMT_GLOBALHEADER)
-        c->flags |= CODEC_FLAG_GLOBAL_HEADER;
-}
 
-void open_video(AVFormatContext *context, OutputStream *stream, AVCodec *codec, AVDictionary *opt_arg)
-{
-    int ret;
-    AVCodecContext *c = stream->st->codec;
-    AVDictionary *opt = NULL;
-    av_dict_copy(&opt, opt_arg, 0);
-    /* open the codec */
-    ret = avcodec_open2(c, codec, &opt);
-    av_dict_free(&opt);
-    if (ret < 0) {
-        fprintf(stderr, "Could not open video codec: %s\n", av_err2str(ret));
-        exit(1);
-    }
-    /* allocate and init a re-usable frame */
-    stream->frame = alloc_picture(c->pix_fmt, c->width, c->height);
-    if (!stream->frame) {
-        fprintf(stderr, "Could not allocate video frame\n");
-        exit(1);
-    }
-    /* If the output format is not YUV420P, then a temporary YUV420P
-     * picture is needed too. It is then converted to the required
-     * output format. */
-    stream->tmp_frame = NULL;
-    if (c->pix_fmt != AV_PIX_FMT_YUV420P) {
-        stream->tmp_frame = alloc_picture(AV_PIX_FMT_YUV420P, c->width, c->height);
-        if (!stream->tmp_frame) {
-            fprintf(stderr, "Could not allocate temporary picture\n");
-            exit(1);
-        }
-    }
-}
 
 /*
  * encode one video frame and send it to the muxer
@@ -494,32 +504,12 @@ void close_stream(AVFormatContext *context, OutputStream *stream)
     swr_free(&stream->swr_ctx);
 }
 
-// get duration of movie file
-int64_t getDuration(const char *filename)
-{
-	int64_t duration = -1;
-	AVFormatContext* context = avformat_alloc_context();
-	if (context != NULL)
-	{
-		avformat_open_input(&context, filename, NULL, NULL);
-		if (context != NULL)
-		{
-			avformat_find_stream_info(context,NULL);
-			duration = context->duration;
-			printf("%d, %d\n", duration, context->start_time);
-		// etc
-			avformat_close_input(&context);
-			avformat_free_context(context);
-		}
-	}
-	return duration;
-}
 
 // 
 const char * prepare(AVFormatContext **context, OutputStream *stream, const char *filename)
 {
 	int ret;
-	AVCodec *codec;
+	//AVCodec *codec;
 	AVDictionary *opt = NULL;
 #ifdef _MSC_VER
 	char drive[MAX_PATH], dir[MAX_PATH];
@@ -574,53 +564,6 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 		output(context, stream, filename);
 		return filename;
 	}
-}
-
-int output(AVFormatContext **context, OutputStream *stream, const char *filename)
-{
-	int ret;
-	AVCodec *codec;
-	AVDictionary *opt = NULL;
-	
-	/* allocate the output media context */
-    avformat_alloc_output_context2(context, NULL, NULL, filename);
-    if (!context) {
-        printf("Could not deduce output format from file extension: using MPEG.\n");
-        avformat_alloc_output_context2(context, NULL, "mpeg", filename);
-    }
-    if (!context)
-        return 0;
-    
-	/* Add the audio and video streams using the default format codecs
-     * and initialize the codecs. */
-    if ((*context)->oformat->video_codec != AV_CODEC_ID_NONE) {
-        add_stream(*context, stream, &codec, (*context)->oformat->video_codec);
-    }
-
-    /* Now that all the parameters are set, we can open the audio and
-     * video codecs and allocate the necessary encode buffers. */
-	open_video(*context, stream, codec, opt);
-
-    av_dump_format(*context, 0, filename, 1);
-
-    /* open the output file, if needed */
-    if (!((*context)->oformat->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&(*context)->pb, filename, AVIO_FLAG_READ_WRITE);
-        if (ret < 0) {
-            fprintf(stderr, "Could not open '%s': %s\n", filename,
-                    av_err2str(ret));
-            return 0;
-        }
-    }
-
-	/* Write the stream header, if any. */
-	ret = avformat_write_header(*context, &opt);
-	if (ret < 0) {
-		fprintf(stderr, "Error occurred when opening output file: %s\n",
-				av_err2str(ret));
-		return 0;
-	}
-	return 1;
 }
 
 void finalize(AVFormatContext *context, OutputStream *stream)

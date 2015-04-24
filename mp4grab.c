@@ -1,10 +1,5 @@
 //
 //
-#include <error.h>
-#ifndef _MSC_VER
-#include <sys/types.h>
-#include <dirent.h>
-#endif
 #include "mp4grab.h"
 
 void Usage(const char *app)
