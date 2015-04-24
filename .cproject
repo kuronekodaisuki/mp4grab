@@ -32,11 +32,8 @@
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.exe.debug.394037049" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.exe.debug">
 								<option id="gnu.c.link.option.libs.1403225147" name="Libraries (-l)" superClass="gnu.c.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="avcodec"/>
-									<listOptionValue builtIn="false" value="avfilter"/>
 									<listOptionValue builtIn="false" value="avformat"/>
 									<listOptionValue builtIn="false" value="avutil"/>
-									<listOptionValue builtIn="false" value="swscale"/>
-									<listOptionValue builtIn="false" value="swresample"/>
 									<listOptionValue builtIn="false" value="opencv_core"/>
 									<listOptionValue builtIn="false" value="opencv_imgproc"/>
 									<listOptionValue builtIn="false" value="opencv_highgui"/>
@@ -85,13 +82,10 @@
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.371286653" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.exe.release.1502795696" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.exe.release">
-								<option id="gnu.c.link.option.libs.209727422" superClass="gnu.c.link.option.libs" valueType="libs">
+								<option id="gnu.c.link.option.libs.209727422" name="Libraries (-l)" superClass="gnu.c.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="avcodec"/>
-									<listOptionValue builtIn="false" value="avfilter"/>
 									<listOptionValue builtIn="false" value="avformat"/>
 									<listOptionValue builtIn="false" value="avutil"/>
-									<listOptionValue builtIn="false" value="swscale"/>
-									<listOptionValue builtIn="false" value="swresample"/>
 									<listOptionValue builtIn="false" value="opencv_core"/>
 									<listOptionValue builtIn="false" value="opencv_imgproc"/>
 									<listOptionValue builtIn="false" value="opencv_highgui"/>
