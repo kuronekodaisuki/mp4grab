@@ -260,51 +260,52 @@ static void open_video(AVFormatContext *context, OutputStream *stream, AVCodec *
     }
 }
 
-static int output(AVFormatContext **context, OutputStream *stream, const char *filename)
+static AVFormatContext* create_output_stream(OutputStream *stream, const char *filename)
 {
 	int ret;
 	AVCodec *codec;
+	AVFormatContext *context;
 	AVDictionary *opt = NULL;
 	
 	/* allocate the output media context */
-    avformat_alloc_output_context2(context, NULL, NULL, filename);
+    avformat_alloc_output_context2(&context, NULL, NULL, filename);
     if (!context) {
         printf("Could not deduce output format from file extension: using MPEG.\n");
-        avformat_alloc_output_context2(context, NULL, "mpeg", filename);
+        avformat_alloc_output_context2(&context, NULL, "mpeg", filename);
     }
     if (!context)
-        return 0;
+        return NULL;
     
 	/* Add the audio and video streams using the default format codecs
      * and initialize the codecs. */
-    if ((*context)->oformat->video_codec != AV_CODEC_ID_NONE) {
-        add_stream(*context, stream, &codec, (*context)->oformat->video_codec);
+    if (context->oformat->video_codec != AV_CODEC_ID_NONE) {
+        add_stream(context, stream, &codec, context->oformat->video_codec);
     }
 
     /* Now that all the parameters are set, we can open the audio and
      * video codecs and allocate the necessary encode buffers. */
-	open_video(*context, stream, codec, opt);
+	open_video(context, stream, codec, opt);
 
-    av_dump_format(*context, 0, filename, 1);
+    av_dump_format(context, 0, filename, 1);
 
     /* open the output file, if needed */
-    if (!((*context)->oformat->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&(*context)->pb, filename, AVIO_FLAG_READ_WRITE);
+    if (!(context->oformat->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&context->pb, filename, AVIO_FLAG_READ_WRITE);
         if (ret < 0) {
             fprintf(stderr, "Could not open '%s': %s\n", filename,
                     av_err2str(ret));
-            return 0;
+            return NULL;
         }
     }
 
 	/* Write the stream header, if any. */
-	ret = avformat_write_header(*context, &opt);
+	ret = avformat_write_header(context, &opt);
 	if (ret < 0) {
 		fprintf(stderr, "Error occurred when opening output file: %s\n",
 				av_err2str(ret));
-		return 0;
+		return NULL;
 	}
-	return 1;
+	return context;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -500,11 +501,96 @@ int write_video_frame(AVFormatContext *context, OutputStream *stream, AVFrame *f
 // close stream
 void close_stream(AVFormatContext *context, OutputStream *stream)
 {
-    avcodec_close(stream->st->codec);
-    av_frame_free(&stream->frame);
-    av_frame_free(&stream->tmp_frame);
-    sws_freeContext(stream->sws_ctx);
-    swr_free(&stream->swr_ctx);
+//    avcodec_close(stream->st->codec);
+//    av_frame_free(&stream->frame);
+//    av_frame_free(&stream->tmp_frame);
+//    sws_freeContext(stream->sws_ctx);
+//    swr_free(&stream->swr_ctx);
+}
+
+AVFormatContext *duplicate(const char *in_filename, const char *out_filename)
+{
+    AVOutputFormat *ofmt = NULL;
+    AVFormatContext *ifmt_ctx = NULL, *ofmt_ctx = NULL;
+    AVPacket pkt;
+    int ret;
+	unsigned i;
+
+	// open input stream
+    if ((ret = avformat_open_input(&ifmt_ctx, in_filename, 0, 0)) < 0) {
+        fprintf(stderr, "Could not open input file '%s'", in_filename);
+        goto end;
+    }
+    if ((ret = avformat_find_stream_info(ifmt_ctx, 0)) < 0) {
+        fprintf(stderr, "Failed to retrieve input stream information");
+        goto end;
+    }
+    av_dump_format(ifmt_ctx, 0, in_filename, 0);
+
+	// open output stream
+    avformat_alloc_output_context2(&ofmt_ctx, NULL, NULL, out_filename);
+    if (!ofmt_ctx) {
+        fprintf(stderr, "Could not create output context\n");
+        ret = AVERROR_UNKNOWN;
+        goto end;
+    }
+    ofmt = ofmt_ctx->oformat;
+    for (i = 0; i < ifmt_ctx->nb_streams; i++) {
+        AVStream *in_stream = ifmt_ctx->streams[i];
+        AVStream *out_stream = avformat_new_stream(ofmt_ctx, in_stream->codec->codec);
+        if (!out_stream) {
+            fprintf(stderr, "Failed allocating output stream\n");
+            ret = AVERROR_UNKNOWN;
+            goto end;
+        }
+        ret = avcodec_copy_context(out_stream->codec, in_stream->codec);
+        if (ret < 0) {
+            fprintf(stderr, "Failed to copy context from input to output stream codec context\n");
+            goto end;
+        }
+        out_stream->codec->codec_tag = 0;
+        if (ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
+            out_stream->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
+    }
+    av_dump_format(ofmt_ctx, 0, out_filename, 1);
+    if (!(ofmt->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&ofmt_ctx->pb, out_filename, AVIO_FLAG_WRITE);
+        if (ret < 0) {
+            fprintf(stderr, "Could not open output file '%s'", out_filename);
+            goto end;
+        }
+    }
+    ret = avformat_write_header(ofmt_ctx, NULL);
+    if (ret < 0) {
+        fprintf(stderr, "Error occurred when opening output file\n");
+        goto end;
+    }
+
+	// duplicate packets
+    while (1) {
+        AVStream *in_stream, *out_stream;
+        ret = av_read_frame(ifmt_ctx, &pkt);
+        if (ret < 0)
+            break;
+        in_stream  = ifmt_ctx->streams[pkt.stream_index];
+        out_stream = ofmt_ctx->streams[pkt.stream_index];
+        //log_packet(ifmt_ctx, &pkt, "in");
+        /* copy packet */
+        pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+        pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+        pkt.duration = av_rescale_q(pkt.duration, in_stream->time_base, out_stream->time_base);
+        pkt.pos = -1;
+        //log_packet(ofmt_ctx, &pkt, "out");
+        ret = av_interleaved_write_frame(ofmt_ctx, &pkt);
+        if (ret < 0) {
+            fprintf(stderr, "Error muxing packet\n");
+            break;
+        }
+        av_free_packet(&pkt);
+    }
+end:
+	avformat_close_input(&ifmt_ctx);
+	return ofmt_ctx;
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -547,8 +633,10 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 		sprintf(temporary, "%s/%s", dir, "temp.mp4");
 #endif
 		// duplicate
+		*context = duplicate(filename, temporary);
+		/*
 		input_context = open_input_file(filename);
-		output(context, stream, temporary);
+		*context = create_output_stream(stream, temporary);
 		// repeat packets	
 		while (0 <= av_read_frame(input_context, &packet))
 		{
@@ -561,11 +649,12 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 		stream->next_pts = (stream->last_pts * stream->st->codec->time_base.den * stream->st->time_base.num) 
 			/ (stream->st->time_base.den * stream->st->codec->time_base.num);
 		avformat_close_input(&input_context);
+		*/
 		return temporary;
 	}
 	else 
 	{
-		output(context, stream, filename);
+		*context = create_output_stream(stream, filename);
 		return filename;
 	}
 }
@@ -583,7 +672,7 @@ void finalize(AVFormatContext *context, OutputStream *stream)
     /* Close each codec. */
     close_stream(context, stream);
 
-    if (!(context->oformat->flags & AVFMT_NOFILE))
+    if (!(context->flags & AVFMT_NOFILE))
         /* Close the output file. */
         avio_closep(&context->pb);
     /* free the stream */

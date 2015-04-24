@@ -40,6 +40,7 @@ int main(int argc, char *argv[])
 	int sortByName = 1;
 	int c;
 	int encode_video = 0;
+	int dup = 0;
 
 #ifdef	_MSC_VER
 	HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -64,7 +65,7 @@ int main(int argc, char *argv[])
 	pictures = argv[2];
 
 	// parse options
-	while ((c = getopt(argc, argv, "w:h:t")) != -1) {
+	while ((c = getopt(argc, argv, "w:h:td")) != -1) {
 		int value = -1;
 		switch (c)
 		{
@@ -89,13 +90,20 @@ int main(int argc, char *argv[])
 		case 't':	// sort by time stamp
 			sortByName = 0;
 			break;
+
+		case 'd':	// dup and exit
+			dup = 1;
+			break;
 		}
 	}
 
 	/////////////////////////////////////////
 	// prepare for output
 	temporary = prepare(&context, &stream, filename);
-
+	if (dup) {
+		finalize(context, &stream);
+		exit(0);
+	}
 	////////////////////////////////////////////////////////////
 	// append pictures
 #ifdef	_MSC_VER	
