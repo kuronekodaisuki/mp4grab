@@ -29,8 +29,6 @@
 #include <libavutil/mathematics.h>
 #include <libavutil/timestamp.h>
 #include <libavformat/avformat.h>
-//#include <libswscale/swscale.h>
-//#include <libswresample/swresample.h>
 
 #define WIDTH	640
 #define	HEIGHT	480
@@ -46,20 +44,14 @@ typedef struct OutputStream {
 	int height;
 	AVStream *st;
     AVFrame *frame;
-    AVFrame *tmp_frame;
-    //struct SwsContext *sws_ctx;
-    //struct SwrContext *swr_ctx;
+//    AVFrame *tmp_frame;
     int64_t next_pts;	// pts of the next frame that will be generated */
 	int64_t	last_pts;	// last pts of duped movie 
 } OutputStream;
 
 
-AVFormatContext* open_input_file(const char *filename);
-AVFormatContext* open_output_file(const char *filename, AVFormatContext *context);
 AVFrame *read_image_frame(OutputStream *stream, const char *filename);
-
-const char * prepare(AVFormatContext **context, OutputStream *stream, const char *filename);
 int write_video_frame(AVFormatContext *context, OutputStream *stream, AVFrame *frame);
 
+const char * create_stream(AVFormatContext **context, OutputStream *stream, const char *filename);
 void close_stream(AVFormatContext *context, OutputStream *stream);
-void finalize(AVFormatContext *context, OutputStream *stream);

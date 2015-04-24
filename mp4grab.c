@@ -99,9 +99,9 @@ int main(int argc, char *argv[])
 
 	/////////////////////////////////////////
 	// prepare for output
-	temporary = prepare(&context, &stream, filename);
+	temporary = create_stream(&context, &stream, filename);
 	if (dup) {
-		finalize(context, &stream);
+		close_stream(context, &stream);
 		exit(0);
 	}
 	////////////////////////////////////////////////////////////
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
 
 	////////////////////////////////////////////////////////////
 	// finish
-	finalize(context, &stream);
+	close_stream(context, &stream);
 	if (strcmp(filename, temporary) != 0)
 	{
 		ret = remove(filename);

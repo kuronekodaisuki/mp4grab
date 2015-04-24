@@ -250,14 +250,14 @@ static void open_video(AVFormatContext *context, OutputStream *stream, AVCodec *
     /* If the output format is not YUV420P, then a temporary YUV420P
      * picture is needed too. It is then converted to the required
      * output format. */
-    stream->tmp_frame = NULL;
-    if (c->pix_fmt != AV_PIX_FMT_YUV420P) {
-        stream->tmp_frame = alloc_picture(AV_PIX_FMT_YUV420P, c->width, c->height);
-        if (!stream->tmp_frame) {
-            fprintf(stderr, "Could not allocate temporary picture\n");
-            exit(1);
-        }
-    }
+//    stream->tmp_frame = NULL;
+//    if (c->pix_fmt != AV_PIX_FMT_YUV420P) {
+//        stream->tmp_frame = alloc_picture(AV_PIX_FMT_YUV420P, c->width, c->height);
+//        if (!stream->tmp_frame) {
+//            fprintf(stderr, "Could not allocate temporary picture\n");
+//            exit(1);
+//        }
+//    }
 }
 
 static AVFormatContext* create_output_stream(OutputStream *stream, const char *filename)
@@ -308,6 +308,7 @@ static AVFormatContext* create_output_stream(OutputStream *stream, const char *f
 	return context;
 }
 
+#if 0
 /////////////////////////////////////////////////////////////////////////////
 // open stream for input
 AVFormatContext * open_input_file(const char *filename)
@@ -348,6 +349,7 @@ AVFormatContext * open_input_file(const char *filename)
     return ifmt_ctx;
 }
 
+
 /////////////////////////////////////////////////////////////////////////////
 // open stream for output
 AVFormatContext * open_output_file(const char *filename, AVFormatContext *ifmt_ctx)
@@ -359,9 +361,9 @@ AVFormatContext * open_output_file(const char *filename, AVFormatContext *ifmt_c
     int ret;
     unsigned int i;
 
-    AVFormatContext *ofmt_ctx = NULL;
-    avformat_alloc_output_context2(&ofmt_ctx, NULL, NULL, filename);
-    if (!ofmt_ctx) {
+    AVFormatContext *context = NULL;
+    avformat_alloc_output_context2(&context, NULL, NULL, filename);
+    if (!context) {
         av_log(NULL, AV_LOG_ERROR, "Could not create output context\n");
         return NULL;
     }
@@ -379,7 +381,7 @@ AVFormatContext * open_output_file(const char *filename, AVFormatContext *ifmt_c
                 av_log(NULL, AV_LOG_FATAL, "Neccessary encoder not found\n");
                 return NULL;
             }
-	        out_stream = avformat_new_stream(ofmt_ctx, encoder);
+	        out_stream = avformat_new_stream(context, encoder);
 		    if (!out_stream) {
 			    av_log(NULL, AV_LOG_ERROR, "Failed allocating output stream\n");
 				return NULL;
@@ -418,7 +420,7 @@ AVFormatContext * open_output_file(const char *filename, AVFormatContext *ifmt_c
             return NULL;
         } else {
             /* if this stream must be remuxed */
-            ret = avcodec_copy_context(ofmt_ctx->streams[i]->codec,
+            ret = avcodec_copy_context(context->streams[i]->codec,
                     ifmt_ctx->streams[i]->codec);
             if (ret < 0) {
                 av_log(NULL, AV_LOG_ERROR, "Copying stream context failed\n");
@@ -426,14 +428,14 @@ AVFormatContext * open_output_file(const char *filename, AVFormatContext *ifmt_c
             }
         }
 
-        if (ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
+        if (context->oformat->flags & AVFMT_GLOBALHEADER)
             enc_ctx->flags |= CODEC_FLAG_GLOBAL_HEADER;
 
     }
-    av_dump_format(ofmt_ctx, 0, filename, 1);
+    av_dump_format(context, 0, filename, 1);
 
-    if (!(ofmt_ctx->oformat->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&ofmt_ctx->pb, filename, AVIO_FLAG_WRITE);
+    if (!(context->oformat->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&context->pb, filename, AVIO_FLAG_WRITE);
         if (ret < 0) {
             av_log(NULL, AV_LOG_ERROR, "Could not open output file '%s'", filename);
             return NULL;
@@ -441,15 +443,15 @@ AVFormatContext * open_output_file(const char *filename, AVFormatContext *ifmt_c
     }
 
     /* init muxer, write output file header */
-    ret = avformat_write_header(ofmt_ctx, NULL);
+    ret = avformat_write_header(context, NULL);
     if (ret < 0) {
         av_log(NULL, AV_LOG_ERROR, "Error occurred when opening output file\n");
         return NULL;
     }
 
-    return ofmt_ctx;
+    return context;
 }
-
+#endif
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -497,21 +499,11 @@ int write_video_frame(AVFormatContext *context, OutputStream *stream, AVFrame *f
     return (frame || got_packet) ? 0 : 1;
 }
 
-/////////////////////////////////////////////////////////////////////////////
-// close stream
-void close_stream(AVFormatContext *context, OutputStream *stream)
-{
-//    avcodec_close(stream->st->codec);
-//    av_frame_free(&stream->frame);
-//    av_frame_free(&stream->tmp_frame);
-//    sws_freeContext(stream->sws_ctx);
-//    swr_free(&stream->swr_ctx);
-}
 
 AVFormatContext *duplicate(OutputStream *stream, const char *in_filename, const char *out_filename)
 {
     AVOutputFormat *ofmt = NULL;
-    AVFormatContext *ifmt_ctx = NULL, *ofmt_ctx = NULL;
+    AVFormatContext *ifmt_ctx = NULL, *context = NULL;
 	AVCodec *codec;
     AVPacket pkt;
 	AVDictionary *opt = NULL;
@@ -532,19 +524,19 @@ AVFormatContext *duplicate(OutputStream *stream, const char *in_filename, const 
     }
     av_dump_format(ifmt_ctx, 0, in_filename, 0);
 #if 0
-	ofmt_ctx = create_output_stream(stream, out_filename);
+	context = create_output_stream(stream, out_filename);
 #else
 	// open output stream
-    avformat_alloc_output_context2(&ofmt_ctx, NULL, NULL, out_filename);
-    if (!ofmt_ctx) {
+    avformat_alloc_output_context2(&context, NULL, NULL, out_filename);
+    if (!context) {
         fprintf(stderr, "Could not create output context\n");
         ret = AVERROR_UNKNOWN;
         goto end;
     }
-    ofmt = ofmt_ctx->oformat;
+    ofmt = context->oformat;
     for (i = 0; i < ifmt_ctx->nb_streams; i++) {
         AVStream *in_stream = ifmt_ctx->streams[i];
-        AVStream *out_stream = avformat_new_stream(ofmt_ctx, in_stream->codec->codec);
+        AVStream *out_stream = avformat_new_stream(context, in_stream->codec->codec);
 		stream->st = out_stream;
         if (!out_stream) {
             fprintf(stderr, "Failed allocating output stream\n");
@@ -557,20 +549,20 @@ AVFormatContext *duplicate(OutputStream *stream, const char *in_filename, const 
             goto end;
         }
         out_stream->codec->codec_tag = 0;
-        if (ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
+        if (context->oformat->flags & AVFMT_GLOBALHEADER)
             out_stream->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
     }
 //	codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-//	open_video(ofmt_ctx, stream, codec, opt_arg);
-    av_dump_format(ofmt_ctx, 0, out_filename, 1);
+//	open_video(context, stream, codec, opt_arg);
+    av_dump_format(context, 0, out_filename, 1);
     if (!(ofmt->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&ofmt_ctx->pb, out_filename, AVIO_FLAG_WRITE);
+        ret = avio_open(&context->pb, out_filename, AVIO_FLAG_WRITE);
         if (ret < 0) {
             fprintf(stderr, "Could not open output file '%s'", out_filename);
             goto end;
         }
     }
-    ret = avformat_write_header(ofmt_ctx, NULL);
+    ret = avformat_write_header(context, NULL);
     if (ret < 0) {
         fprintf(stderr, "Error occurred when opening output file\n");
         goto end;
@@ -583,15 +575,15 @@ AVFormatContext *duplicate(OutputStream *stream, const char *in_filename, const 
         if (ret < 0)
             break;
         in_stream  = ifmt_ctx->streams[pkt.stream_index];
-        out_stream = ofmt_ctx->streams[pkt.stream_index];
+        out_stream = context->streams[pkt.stream_index];
         //log_packet(ifmt_ctx, &pkt, "in");
         /* copy packet */
         pkt.pts = av_rescale_q_rnd(pkt.pts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
         pkt.dts = av_rescale_q_rnd(pkt.dts, in_stream->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
         pkt.duration = av_rescale_q(pkt.duration, in_stream->time_base, out_stream->time_base);
         pkt.pos = -1;
-        //log_packet(ofmt_ctx, &pkt, "out");
-        ret = av_interleaved_write_frame(ofmt_ctx, &pkt);
+        //log_packet(context, &pkt, "out");
+        ret = av_interleaved_write_frame(context, &pkt);
         if (ret < 0) {
             fprintf(stderr, "Error muxing packet\n");
             break;
@@ -600,13 +592,13 @@ AVFormatContext *duplicate(OutputStream *stream, const char *in_filename, const 
     }
 end:
 	avformat_close_input(&ifmt_ctx);
-	return ofmt_ctx;
+	return context;
 }
 
 /////////////////////////////////////////////////////////////////////////////
 // prepare for output stream.
 // if movie file exists, duplicate it to temporary file and use it for output stream
-const char * prepare(AVFormatContext **context, OutputStream *stream, const char *filename)
+const char * create_stream(AVFormatContext **context, OutputStream *stream, const char *filename)
 {
 	int ret;
 	//AVCodec *codec;
@@ -670,8 +662,8 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// finalize output stream
-void finalize(AVFormatContext *context, OutputStream *stream)
+// close stream
+void close_stream(AVFormatContext *context, OutputStream *stream)
 {
 	/* Write the trailer, if any. The trailer must be written before you
      * close the CodecContexts open when you wrote the header; otherwise
@@ -680,7 +672,8 @@ void finalize(AVFormatContext *context, OutputStream *stream)
     av_write_trailer(context);
 
     /* Close each codec. */
-    close_stream(context, stream);
+//	avcodec_close(stream->st->codec);
+//	av_frame_free(&stream->frame);
 
     if (!(context->flags & AVFMT_NOFILE))
         /* Close the output file. */
