@@ -41,8 +41,6 @@ static int write_frame(AVFormatContext *context, const AVRational *time_base, AV
     return av_interleaved_write_frame(context, packet);
 }
 
-
-/**************************************************************/
 /* video output */
 static AVFrame *alloc_picture(enum AVPixelFormat pix_fmt, int width, int height)
 {
@@ -115,6 +113,8 @@ static int ReadImage(AVCodecContext *context, OutputStream *stream, const char *
 	return 0;
 }
 
+///////////////////////////////////////////////////////////////////////////////////
+// read image from file and increment pts
 AVFrame *read_image_frame(OutputStream *stream, const char *filename)
 {
 	AVCodecContext *context = stream->st->codec;
@@ -308,6 +308,7 @@ static int output(AVFormatContext **context, OutputStream *stream, const char *f
 }
 
 /////////////////////////////////////////////////////////////////////////////
+// open stream for input
 AVFormatContext * open_input_file(const char *filename)
 {
     int ret;
@@ -346,6 +347,8 @@ AVFormatContext * open_input_file(const char *filename)
     return ifmt_ctx;
 }
 
+/////////////////////////////////////////////////////////////////////////////
+// open stream for output
 AVFormatContext * open_output_file(const char *filename, AVFormatContext *ifmt_ctx)
 {
     AVStream *out_stream;
@@ -448,10 +451,9 @@ AVFormatContext * open_output_file(const char *filename, AVFormatContext *ifmt_c
 
 
 
-/*
- * encode one video frame and send it to the muxer
- * return 1 when encoding is finished, 0 otherwise
- */
+/////////////////////////////////////////////////////////////////////////////
+//encode one video frame and send it to the muxer
+// return 1 when encoding is finished, 0 otherwise
 int write_video_frame(AVFormatContext *context, OutputStream *stream, AVFrame *frame)
 {
     int ret;
@@ -494,7 +496,8 @@ int write_video_frame(AVFormatContext *context, OutputStream *stream, AVFrame *f
     return (frame || got_packet) ? 0 : 1;
 }
 
-
+/////////////////////////////////////////////////////////////////////////////
+// close stream
 void close_stream(AVFormatContext *context, OutputStream *stream)
 {
     avcodec_close(stream->st->codec);
@@ -504,8 +507,9 @@ void close_stream(AVFormatContext *context, OutputStream *stream)
     swr_free(&stream->swr_ctx);
 }
 
-
-// 
+/////////////////////////////////////////////////////////////////////////////
+// prepare for output stream.
+// if movie file exists, duplicate it to temporary file and use it for output stream
 const char * prepare(AVFormatContext **context, OutputStream *stream, const char *filename)
 {
 	int ret;
@@ -566,6 +570,8 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 	}
 }
 
+/////////////////////////////////////////////////////////////////////////////
+// finalize output stream
 void finalize(AVFormatContext *context, OutputStream *stream)
 {
 	/* Write the trailer, if any. The trailer must be written before you
