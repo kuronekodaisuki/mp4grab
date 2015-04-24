@@ -290,7 +290,7 @@ static AVFormatContext* create_output_stream(OutputStream *stream, const char *f
 
     /* open the output file, if needed */
     if (!(context->oformat->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&context->pb, filename, AVIO_FLAG_READ_WRITE);
+        ret = avio_open(&context->pb, filename, AVIO_FLAG_WRITE);
         if (ret < 0) {
             fprintf(stderr, "Could not open '%s': %s\n", filename,
                     av_err2str(ret));
@@ -508,13 +508,18 @@ void close_stream(AVFormatContext *context, OutputStream *stream)
 //    swr_free(&stream->swr_ctx);
 }
 
-AVFormatContext *duplicate(const char *in_filename, const char *out_filename)
+AVFormatContext *duplicate(OutputStream *stream, const char *in_filename, const char *out_filename)
 {
     AVOutputFormat *ofmt = NULL;
     AVFormatContext *ifmt_ctx = NULL, *ofmt_ctx = NULL;
+	AVCodec *codec;
     AVPacket pkt;
+	AVDictionary *opt = NULL;
+	AVDictionary *opt_arg = NULL;
     int ret;
 	unsigned i;
+
+    av_dict_copy(&opt, opt_arg, 0);
 
 	// open input stream
     if ((ret = avformat_open_input(&ifmt_ctx, in_filename, 0, 0)) < 0) {
@@ -526,7 +531,9 @@ AVFormatContext *duplicate(const char *in_filename, const char *out_filename)
         goto end;
     }
     av_dump_format(ifmt_ctx, 0, in_filename, 0);
-
+#if 0
+	ofmt_ctx = create_output_stream(stream, out_filename);
+#else
 	// open output stream
     avformat_alloc_output_context2(&ofmt_ctx, NULL, NULL, out_filename);
     if (!ofmt_ctx) {
@@ -538,6 +545,7 @@ AVFormatContext *duplicate(const char *in_filename, const char *out_filename)
     for (i = 0; i < ifmt_ctx->nb_streams; i++) {
         AVStream *in_stream = ifmt_ctx->streams[i];
         AVStream *out_stream = avformat_new_stream(ofmt_ctx, in_stream->codec->codec);
+		stream->st = out_stream;
         if (!out_stream) {
             fprintf(stderr, "Failed allocating output stream\n");
             ret = AVERROR_UNKNOWN;
@@ -552,6 +560,8 @@ AVFormatContext *duplicate(const char *in_filename, const char *out_filename)
         if (ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
             out_stream->codec->flags |= CODEC_FLAG_GLOBAL_HEADER;
     }
+//	codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+//	open_video(ofmt_ctx, stream, codec, opt_arg);
     av_dump_format(ofmt_ctx, 0, out_filename, 1);
     if (!(ofmt->flags & AVFMT_NOFILE)) {
         ret = avio_open(&ofmt_ctx->pb, out_filename, AVIO_FLAG_WRITE);
@@ -565,7 +575,7 @@ AVFormatContext *duplicate(const char *in_filename, const char *out_filename)
         fprintf(stderr, "Error occurred when opening output file\n");
         goto end;
     }
-
+#endif
 	// duplicate packets
     while (1) {
         AVStream *in_stream, *out_stream;
@@ -633,7 +643,7 @@ const char * prepare(AVFormatContext **context, OutputStream *stream, const char
 		sprintf(temporary, "%s/%s", dir, "temp.mp4");
 #endif
 		// duplicate
-		*context = duplicate(filename, temporary);
+		*context = duplicate(stream, filename, temporary);
 		/*
 		input_context = open_input_file(filename);
 		*context = create_output_stream(stream, temporary);
